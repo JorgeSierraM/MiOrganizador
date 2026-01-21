@@ -16,7 +16,6 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { LineChart } from "react-native-chart-kit";
 
 type ISODate = `${number}-${string}-${string}`;
-
 type Status = "done" | "missed" | null;
 
 type Activity = {
@@ -37,9 +36,8 @@ const STORAGE_KEY = "mi_organizador_v1";
 // -------- utilidades fecha ----------
 const pad2 = (n: number): string => String(n).padStart(2, "0");
 
-const toISODate = (d: Date): ISODate => {
-  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}` as ISODate;
-};
+const toISODate = (d: Date): ISODate =>
+  `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}` as ISODate;
 
 const parseISO = (iso: ISODate): Date => {
   const [y, m, d] = iso.split("-").map(Number);
@@ -72,8 +70,7 @@ const startOfWeekMonday = (date: Date): Date => {
   return d;
 };
 
-const daysInMonth = (year: number, monthIndex0: number): number =>
-  new Date(year, monthIndex0 + 1, 0).getDate();
+const daysInMonth = (year: number, monthIndex0: number): number => new Date(year, monthIndex0 + 1, 0).getDate();
 
 const weekdayLabels = ["L", "M", "M", "J", "V", "S", "D"] as const;
 
@@ -96,17 +93,13 @@ function closeMissingDays(params: {
 }): { statusByDate: StatusByDate; lastClosedISO: ISODate } {
   const { activities, statusByDate, lastClosedISO, todayISO } = params;
 
-  if (!lastClosedISO) {
-    // primera ejecución: marca hoy como cerrado para no rellenar pasado
-    return { statusByDate, lastClosedISO: todayISO };
-  }
+  if (!lastClosedISO) return { statusByDate, lastClosedISO: todayISO };
 
   const days = diffDays(lastClosedISO, todayISO);
   if (days <= 0) return { statusByDate, lastClosedISO };
 
   let next: StatusByDate = { ...statusByDate };
 
-  // Cierra desde (lastClosed + 1) hasta ayer
   for (let i = 1; i <= days; i++) {
     const dayISO = addDaysISO(lastClosedISO, i);
     if (dayISO === todayISO) break;
@@ -159,7 +152,7 @@ function buildMonthlySeries(params: {
 
 const uid = (): string => Math.random().toString(36).slice(2, 10);
 
-export default function App(): React.ReactElement {
+export default function Index(): React.ReactElement {
   const [todayISO, setTodayISO] = useState<ISODate>(toISODate(new Date()));
 
   const [activities, setActivities] = useState<Activity[]>([
@@ -185,11 +178,7 @@ export default function App(): React.ReactElement {
       const saved = await loadState();
 
       if (!saved) {
-        const init: PersistedState = {
-          activities,
-          statusByDate: {},
-          lastClosedISO: todayISO,
-        };
+        const init: PersistedState = { activities, statusByDate: {}, lastClosedISO: todayISO };
         await saveState(init);
         setLastClosedISO(todayISO);
         return;
@@ -225,7 +214,7 @@ export default function App(): React.ReactElement {
     })();
   }, [activities, statusByDate, lastClosedISO]);
 
-  // al volver al foreground: recalcula hoy + cierre
+  // foreground: actualiza hoy + cierre
   useEffect(() => {
     const sub = AppState.addEventListener("change", async (nextState) => {
       const prev = appState.current;
@@ -235,21 +224,11 @@ export default function App(): React.ReactElement {
         const newToday = toISODate(new Date());
         setTodayISO(newToday);
 
-        const fixed = closeMissingDays({
-          activities,
-          statusByDate,
-          lastClosedISO,
-          todayISO: newToday,
-        });
-
+        const fixed = closeMissingDays({ activities, statusByDate, lastClosedISO, todayISO: newToday });
         setStatusByDate(fixed.statusByDate);
         setLastClosedISO(fixed.lastClosedISO);
 
-        await saveState({
-          activities,
-          statusByDate: fixed.statusByDate,
-          lastClosedISO: fixed.lastClosedISO,
-        });
+        await saveState({ activities, statusByDate: fixed.statusByDate, lastClosedISO: fixed.lastClosedISO });
       }
     });
 
@@ -293,7 +272,6 @@ export default function App(): React.ReactElement {
     setAddOpen(false);
   };
 
-  // chart
   const screenW = Dimensions.get("window").width;
   const today = parseISO(todayISO);
   const year = today.getFullYear();
@@ -305,6 +283,16 @@ export default function App(): React.ReactElement {
   );
 
   const sparseLabels = useMemo(() => labels.map((l) => (Number(l) % 5 === 0 ? l : "")), [labels]);
+
+  // Si TS se pone estricto con chart-kit, este cast evita errores de tipos.
+  const chartData = useMemo(
+    () =>
+      ({
+        labels: sparseLabels,
+        datasets: [{ data: data as unknown as number[] }],
+      }) as any,
+    [sparseLabels, data]
+  );
 
   return (
     <SafeAreaView style={styles.container}>
@@ -376,10 +364,7 @@ export default function App(): React.ReactElement {
         <Text style={styles.chartTitle}>Actividades cumplidas (mes)</Text>
 
         <LineChart
-          data={{
-            labels: sparseLabels,
-            datasets: [{ data }],
-          }}
+          data={chartData}
           width={Math.min(screenW - 32, 900)}
           height={220}
           withDots={true}
@@ -407,12 +392,7 @@ export default function App(): React.ReactElement {
         <View style={styles.modalBackdrop}>
           <View style={styles.modalCard}>
             <Text style={styles.modalTitle}>Nueva actividad</Text>
-            <TextInput
-              value={newName}
-              onChangeText={setNewName}
-              placeholder="Ej: Leer 20 min"
-              style={styles.modalInput}
-            />
+            <TextInput value={newName} onChangeText={setNewName} placeholder="Ej: Leer 20 min" style={styles.modalInput} />
 
             <View style={styles.modalRow}>
               <Pressable onPress={() => setAddOpen(false)} style={[styles.modalBtn, styles.modalCancel]}>
